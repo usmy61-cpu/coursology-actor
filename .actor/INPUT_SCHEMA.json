@@ -1,0 +1,73 @@
+{
+  "title": "Coursology Q-Bank Scraper Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "email": {
+      "title": "Coursology Email",
+      "type": "string",
+      "description": "Your Coursology account email address.",
+      "editor": "textfield"
+    },
+    "password": {
+      "title": "Password",
+      "type": "string",
+      "description": "Your Coursology account password.",
+      "editor": "textfield",
+      "isSecret": true
+    },
+    "test_url": {
+      "title": "Test Page URL",
+      "type": "string",
+      "description": "Full URL of the test/Q-bank page — navigate to Item 1 first, then paste the URL here.",
+      "editor": "textfield"
+    },
+    "max_questions": {
+      "title": "Max Questions to Scrape",
+      "type": "integer",
+      "description": "Stop after this many questions. Set to 0 or omit to scrape all.",
+      "default": 0,
+      "minimum": 0,
+      "editor": "number"
+    },
+    "start_from": {
+      "title": "Resume From Question Number",
+      "type": "integer",
+      "description": "Skip ahead to this question number (1-indexed). Useful for resuming interrupted runs.",
+      "default": 1,
+      "minimum": 1,
+      "editor": "number"
+    },
+    "delay_min_ms": {
+      "title": "Minimum delay between questions (ms)",
+      "type": "integer",
+      "description": "Minimum milliseconds to wait between questions. Increase to reduce bot-detection risk.",
+      "default": 1200,
+      "minimum": 500,
+      "editor": "number"
+    },
+    "delay_max_ms": {
+      "title": "Maximum delay between questions (ms)",
+      "type": "integer",
+      "description": "Maximum milliseconds to wait between questions (random jitter applied).",
+      "default": 2500,
+      "minimum": 500,
+      "editor": "number"
+    },
+    "save_audio": {
+      "title": "Save Audio Files",
+      "type": "boolean",
+      "description": "If true, base64-encoded audio is decoded and saved to the Key-Value Store.",
+      "default": true,
+      "editor": "checkbox"
+    },
+    "headless": {
+      "title": "Run Browser in Headless Mode",
+      "type": "boolean",
+      "description": "Uncheck only for local debugging. Always leave checked on Apify platform.",
+      "default": true,
+      "editor": "checkbox"
+    }
+  },
+  "required": ["email", "password", "test_url"]
+}
