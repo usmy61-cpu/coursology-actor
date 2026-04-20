@@ -17,8 +17,10 @@ import os
 
 from apify import Actor
 
-# Make src/ importable when running locally
-sys.path.insert(0, os.path.dirname(__file__))
+# Ensure src/ is on the path for local runs (PYTHONPATH covers Apify platform)
+_src_dir = os.path.dirname(os.path.abspath(__file__))
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 from browser import launch_browser, login
 from scraper import scrape
