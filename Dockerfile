@@ -12,5 +12,8 @@ RUN playwright install chromium
 COPY src/ ./src/
 COPY .actor/ ./.actor/
 
+# Make src/ importable as a package
+ENV PYTHONPATH="/usr/src/app/src:${PYTHONPATH}"
+
 # Entry point
 CMD ["python", "src/main.py"]
