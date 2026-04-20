@@ -34,9 +34,7 @@ async def _fill_field(page: Page, selector: str, value: str) -> None:
     """Click, clear, and type into a field — works with React and plain HTML."""
     loc = page.locator(selector).first
     await loc.wait_for(state="visible", timeout=10_000)
-    await loc.click()
-    await asyncio.sleep(0.15)
-    await loc.triple_click()
+    await loc.click(click_count=3)  # triple-click to select all
     await page.keyboard.press("Control+a")
     await page.keyboard.press("Delete")
     await asyncio.sleep(0.1)
