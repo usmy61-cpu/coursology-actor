@@ -1,13 +1,14 @@
 {
-  "title": "Coursology Q-Bank Scraper Input",
+  "title": "Coursology Q-Bank Scraper",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "email": {
-      "title": "Coursology Email",
+      "title": "Email or Username",
       "type": "string",
-      "description": "Your Coursology account email address.",
-      "editor": "textfield"
+      "description": "Your Coursology account email or username.",
+      "editor": "textfield",
+      "sectionCaption": "Authentication"
     },
     "password": {
       "title": "Password",
@@ -17,56 +18,52 @@
       "isSecret": true
     },
     "test_url": {
-      "title": "Test Page URL",
+      "title": "Test URL",
       "type": "string",
-      "description": "Full URL of the test/Q-bank page — navigate to Item 1 first, then paste the URL here.",
-      "editor": "textfield"
+      "description": "Full URL of the Coursology test, starting at Item 1. Example: https://coursology-qbank.com/qbanks/ambossone/tests/1776681015",
+      "editor": "textfield",
+      "sectionCaption": "Scraping Target"
     },
     "max_questions": {
-      "title": "Max Questions to Scrape",
+      "title": "Max Questions",
       "type": "integer",
-      "description": "Stop after this many questions. Set to 0 or omit to scrape all.",
+      "description": "Stop after scraping this many questions. Set to 0 to scrape all.",
       "default": 0,
       "minimum": 0,
-      "editor": "number"
+      "sectionCaption": "Scraping Options"
     },
     "start_from": {
-      "title": "Resume From Question Number",
+      "title": "Start From Question #",
       "type": "integer",
-      "description": "Skip ahead to this question number (1-indexed). Useful for resuming interrupted runs.",
+      "description": "Resume from this question number. Leave at 1 for auto-detection from saved state.",
       "default": 1,
-      "minimum": 1,
-      "editor": "number"
+      "minimum": 1
     },
     "delay_min_ms": {
-      "title": "Minimum delay between questions (ms)",
+      "title": "Min Delay Between Questions (ms)",
       "type": "integer",
-      "description": "Minimum milliseconds to wait between questions. Increase to reduce bot-detection risk.",
+      "description": "Minimum random delay between question navigations in milliseconds.",
       "default": 1200,
-      "minimum": 500,
-      "editor": "number"
+      "minimum": 500
     },
     "delay_max_ms": {
-      "title": "Maximum delay between questions (ms)",
+      "title": "Max Delay Between Questions (ms)",
       "type": "integer",
-      "description": "Maximum milliseconds to wait between questions (random jitter applied).",
+      "description": "Maximum random delay between question navigations in milliseconds.",
       "default": 2500,
-      "minimum": 500,
-      "editor": "number"
+      "minimum": 1000
     },
     "save_audio": {
       "title": "Save Audio Files",
       "type": "boolean",
-      "description": "If true, base64-encoded audio is decoded and saved to the Key-Value Store.",
-      "default": true,
-      "editor": "checkbox"
+      "description": "Decode and save base64 audio to the Apify Key-Value Store.",
+      "default": true
     },
     "headless": {
-      "title": "Run Browser in Headless Mode",
+      "title": "Headless Browser",
       "type": "boolean",
-      "description": "Uncheck only for local debugging. Always leave checked on Apify platform.",
-      "default": true,
-      "editor": "checkbox"
+      "description": "Run the browser without a visible window. Always true on the Apify platform.",
+      "default": true
     }
   },
   "required": ["email", "password", "test_url"]
