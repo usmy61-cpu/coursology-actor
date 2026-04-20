@@ -2,11 +2,11 @@
 main.py — Apify Actor entry point for Coursology Q-Bank Scraper.
 
 Flow:
-  1. Read input from Apify (email, password, test_url, options)
+  1. Read input (email, password, test_url, options)
   2. Launch Playwright Chromium
-  3. Log in to Coursology
+  3. Log in at coursology-qbank.com/auth/signin
   4. Navigate to the test URL
-  5. Run scraper loop → push each question to Dataset
+  5. Scrape questions → push to Dataset
   6. Save audio to Key-Value Store
 """
 from __future__ import annotations
@@ -17,7 +17,6 @@ import os
 
 from apify import Actor
 
-# Ensure src/ is on the path for local runs (PYTHONPATH covers Apify platform)
 _src_dir = os.path.dirname(os.path.abspath(__file__))
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
@@ -48,7 +47,7 @@ async def main() -> None:
             )
             return
 
-        # ── 2. Auto-resume: load last saved question number ──────────────────
+        # ── 2. Auto-resume ───────────────────────────────────────────────────
         if start_from == 1:
             saved_n = await load_state()
             if saved_n > 0:
@@ -61,7 +60,7 @@ async def main() -> None:
 
         try:
             # ── 4. Log in ────────────────────────────────────────────────────
-            await login(page, email, password)
+            await login(page, email=email, password=password)
 
             # ── 5. Navigate to test page ─────────────────────────────────────
             print(f"[*] Navigating to test URL: {test_url}")
