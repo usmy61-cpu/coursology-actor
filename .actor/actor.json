@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "coursology-qbank-scraper",
+  "title": "Coursology Q-Bank Scraper",
+  "description": "Scrapes questions, answers, explanations, exhibits, and audio from Coursology Q-Bank tests.",
+  "version": "1.0",
+  "input": "./INPUT_SCHEMA.json",
+  "dockerfile": "../Dockerfile"
+}
