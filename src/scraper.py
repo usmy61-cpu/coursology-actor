@@ -1,10 +1,5 @@
 """
 scraper.py — Core scraping logic ported from Selenium → Playwright (async).
-
-All driver.execute_script(js, el)  →  await page.evaluate(js, el)
-All driver.find_element(...)       →  page.locator(...) / page.query_selector(...)
-All time.sleep(x)                  →  await asyncio.sleep(x)
-Audio saving                       →  storage.save_audio()
 """
 from __future__ import annotations
 
@@ -16,7 +11,7 @@ from typing import Any
 
 from playwright.async_api import Page, ElementHandle
 
-from storage import save_audio, save_question, save_state
+from storage import save_audio, save_question, save_state, flush_json
 
 # ── UI noise to strip from text ───────────────────────────────────────────────
 UI_NOISE = [
@@ -46,7 +41,8 @@ def strip_ui_noise(text: str) -> str:
     return "\n".join(clean).strip()
 
 
-# ── JS walker — shared between question and explanation ────────────────────────
+# ── JS walkers ────────────────────────────────────────────────────────────────
+
 _QUESTION_JS_WALKER = """
 (el) => {
 var KEEP_TAGS = new Set(['P','STRONG','EM','B','I','U','S','MARK','SUP','SUB',
@@ -129,13 +125,6 @@ var KEEP_TAGS = new Set(['P','STRONG','EM','B','I','U','S','MARK',
     'TABLE','THEAD','TBODY','TR','TD','TH','UL','OL','LI','BR',
     'H1','H2','H3','H4','H5','H6','AUDIO','VIDEO','SOURCE']);
 var SKIP_TAGS = new Set(['SVG','NAV','INPUT','SCRIPT','STYLE','PATH','CIRCLE','RECT','POLYGON']);
-var UI_HINTS  = ['fixed','z-[','cursor-','radix-','navbar','sidebar','scrollbar',
-    'group/draggable','group/resizable','group/triggerable','data-radix'];
-
-function isUIChrome(node) {
-    var cls=(node.className||'').toString();
-    return UI_HINTS.some(function(h){return cls.indexOf(h)!==-1;});
-}
 
 function buildHtml(node) {
     if (node.nodeType===3) return node.textContent;
@@ -291,9 +280,7 @@ return results;
 """
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ────────────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_body_text(page: Page) -> str:
     try:
@@ -319,7 +306,6 @@ async def get_qid(page: Page) -> str | None:
 
 
 async def get_question(page: Page) -> dict:
-    """Returns {text, html}."""
     try:
         containers = await page.query_selector_all("div#question-text")
         for container in containers:
@@ -338,7 +324,6 @@ async def get_question(page: Page) -> dict:
             except Exception:
                 pass
 
-        # Fallback: single <p>
         paras = await page.query_selector_all("p.mb-4.text-start")
         for p in paras:
             try:
@@ -359,7 +344,6 @@ async def get_question(page: Page) -> dict:
 
 
 async def click_answer(page: Page) -> bool:
-    """Click a random un-selected answer choice. Returns True if clicked."""
     try:
         container = None
         for sel in [
@@ -374,7 +358,6 @@ async def click_answer(page: Page) -> bool:
         if not container:
             return False
 
-        # Check if already answered
         expl = await page.query_selector("div#question-explanation")
         if expl:
             return False
@@ -395,7 +378,6 @@ async def click_answer(page: Page) -> bool:
 
 
 async def wait_for_explanation(page: Page, timeout: float = 8.0) -> bool:
-    """Wait for the explanation panel to appear after clicking an answer."""
     try:
         await page.wait_for_selector(
             "div#question-explanation, .explanation-box, .discussion-section",
@@ -419,7 +401,6 @@ async def get_choices(page: Page) -> tuple[list, str | None]:
         if not container:
             return choices, choices_header
 
-        # Optional shared table header
         try:
             header_el = await container.query_selector("thead th, .choices-header, th")
             if header_el:
@@ -439,14 +420,12 @@ async def get_choices(page: Page) -> tuple[list, str | None]:
                 if not full_text:
                     continue
 
-                # Label extraction: leading "A.", "A)", or "A "
                 label = None
                 m = re.match(r'^([A-E])[\.\)]\s*', full_text)
                 if m:
                     label = m.group(1)
                     full_text = full_text[m.end():]
 
-                # Strip percentage suffix  "61%"
                 percentage: int | None = None
                 pm = re.search(r'\s+(\d{1,3})%\s*$', full_text)
                 if pm:
@@ -455,7 +434,6 @@ async def get_choices(page: Page) -> tuple[list, str | None]:
 
                 clean_text = strip_ui_noise(full_text).strip()
 
-                # Status
                 status: str | None = None
                 cls = await row.get_attribute("class") or ""
                 aria = await row.get_attribute("aria-pressed") or ""
@@ -464,7 +442,6 @@ async def get_choices(page: Page) -> tuple[list, str | None]:
                 elif "selected" in cls or "ring" in cls or aria == "true":
                     status = "selected"
                 else:
-                    # Fallback: check inner SVG class
                     try:
                         svgs = await row.query_selector_all("svg")
                         for svg in svgs:
@@ -521,7 +498,6 @@ async def get_explanation(page: Page) -> dict:
         clean_text = strip_ui_noise(raw_text)
         clean_text = re.sub(r'\n?--- EXHIBIT:.*?---\n?', '', clean_text)
         clean_text = re.sub(r'\[IMAGE:[^\]]+\]', '', clean_text).strip()
-
         clean_html = await page.evaluate(_EXPLANATION_HTML_JS, elem) or ""
 
         if len(clean_text) > 10:
@@ -555,7 +531,6 @@ async def get_metadata(page: Page) -> dict:
 async def get_references(page: Page) -> list:
     refs: list[dict] = []
     try:
-        # Strategy 1: find "References" label then siblings
         label_el = await page.query_selector(
             "xpath=//span[contains(text(),'References')] | //p[contains(text(),'References')]"
         )
@@ -571,7 +546,6 @@ async def get_references(page: Page) -> list:
             if refs:
                 return _dedup_refs(refs)
 
-        # Strategy 2: explanation-area links
         expl = await page.query_selector("div#question-explanation")
         if expl:
             all_links = await expl.query_selector_all("a")
@@ -673,7 +647,6 @@ async def scrape_all_exhibits(page: Page) -> list:
                     continue
                 seen_names.add(name)
 
-                # Location
                 location = "question"
                 try:
                     in_expl = await btn.query_selector_all("xpath=./ancestor::*[@id='question-explanation']")
@@ -705,7 +678,6 @@ async def scrape_all_exhibits(page: Page) -> list:
                                 media = await page.evaluate(_EXHIBIT_MEDIA_JS, [panel_id, modal_el])
                                 m_url = media.get("url") if media else None
                                 m_type = media.get("type") if media else None
-
                                 content = await page.evaluate(_MODAL_CONTENT_JS, [panel_id, modal_el])
                                 exhibits.append({
                                     "name":       f"{name} ({t_name})",
@@ -781,7 +753,7 @@ async def scrape_audio(page: Page, question_number: int, save: bool = True) -> l
 
                     if save:
                         kv_url = await save_audio(filename, audio_bytes, mime_type or "audio/mpeg")
-                        print(f"    [♫] Saved audio to KV store: {filename} ({len(audio_bytes):,} bytes)")
+                        print(f"    [♫] Saved audio: {filename} ({len(audio_bytes):,} bytes)")
                         audio_list.append({
                             "location":  location,
                             "src_type":  "base64",
@@ -843,17 +815,14 @@ async def scrape(
     delay_min_ms: int = 1200,
     delay_max_ms: int = 2500,
     save_audio_files: bool = True,
+    output_filename: str = "questions",
 ) -> None:
-    """
-    Main scrape loop. Pushes each question directly to Apify Dataset.
-    Saves progress state after every question so runs can be resumed.
-    """
     total = await get_total(page)
     effective_max = max_questions if max_questions > 0 else (total or 9999)
 
-    print(f"[*] Scraping up to {effective_max} questions (start_from={start_from})…\n")
+    print(f"[*] Scraping up to {effective_max} questions (start_from={start_from})…")
+    print(f"[*] Output filename: {output_filename}.json\n")
 
-    # Skip ahead if resuming
     if start_from > 1:
         print(f"[*] Fast-forwarding to question {start_from}…")
         for skip in range(start_from - 1):
@@ -862,13 +831,15 @@ async def scrape(
                 print(f"[!] Could not skip to question {start_from}, stopping early.")
                 return
 
+    all_questions: list[dict] = []
     n = start_from - 1
+
     while True:
         n += 1
         delay_s = random.randint(delay_min_ms, delay_max_ms) / 1000
         await asyncio.sleep(delay_s)
 
-        qid = await get_qid(page)
+        qid    = await get_qid(page)
         q_data = await get_question(page)
 
         if not q_data["text"]:
@@ -878,7 +849,6 @@ async def scrape(
         lbl = f"[{n}/{total}]" if total else f"[{n}]"
         print(f"  {lbl} QID:{qid or '?'} — scraping…")
 
-        # Click answer, wait for explanation
         clicked = await click_answer(page)
         if clicked:
             found = await wait_for_explanation(page)
@@ -887,7 +857,6 @@ async def scrape(
         else:
             await asyncio.sleep(1.0)
 
-        # Gather all data
         exhibits   = await scrape_all_exhibits(page)
         audio_data = await scrape_audio(page, n, save=save_audio_files)
         choices, choices_header = await get_choices(page)
@@ -900,7 +869,7 @@ async def scrape(
         print(f"    Choices: {len(choices)} | Correct: {correct_label or 'N/A'} — {(correct_text or '')[:40]}")
         print(f"    Exhibits: {len(exhibits)} | Audio: {len(audio_data)}")
 
-        question_record = {
+        record = {
             "number":           n,
             "question_id":      qid,
             "question":         q_data["text"],
@@ -919,9 +888,11 @@ async def scrape(
             "references":       references,
         }
 
-        await save_question(question_record)
+        all_questions.append(record)
+        await save_question(record, output_filename)
         await save_state(n)
-        print(f"    [✓] Saved Q{n} to dataset")
+        await flush_json(all_questions, output_filename)
+        print(f"    [✓] Saved Q{n} → dataset + KV:{output_filename}.json")
 
         if n >= effective_max:
             print(f"\n[*] Reached limit ({effective_max}). Done!")
@@ -931,4 +902,4 @@ async def scrape(
             print(f"\n[*] No Next button after Q{n} — end of test.")
             break
 
-    print(f"\n[*] Scraping complete. {n - (start_from - 1)} questions saved.")
+    print(f"\n[*] Scraping complete. {len(all_questions)} questions → KV:{output_filename}.json")
